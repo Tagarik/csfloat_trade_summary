@@ -1,5 +1,5 @@
 from api import CSFloat
-import asyncio, pprint, math, json, os, dotenv, time
+import asyncio, math, json, os, dotenv, time
 from datetime import datetime
 
 def changeToken():
@@ -35,7 +35,7 @@ async def refresh():
             })
     clr()
     json.dump(AnalysisData, open('AnalysisData.json', 'w'), indent=4)
-    pprint.pprint('Data has been refreshed successfully')
+    print('Data has been refreshed successfully')
     input("Press any key to continue...")
 
 def AnalyseData():
@@ -53,17 +53,16 @@ def AnalyseData():
 
         
 def sellerList(data):
-    sellers = []
+    sellers = set()  # Use a set to ensure unique sellers
     for i in data:
-        if i['seller'] not in sellers:
-            sellers.append(i['seller'])
-    return sellers
+        sellers.add(i['seller'])
+    return list(sellers)
 
 def createSummary(sellers, data):
     summary = []
     for i in sellers:
-        total : int = 0
-        count : int = 0
+        total = 0
+        count = 0
         latest_date = None
         for x in data:
             if i == x['seller']:
