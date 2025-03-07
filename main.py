@@ -81,10 +81,64 @@ def createSummary(sellers, data):
 
 def displaySummary(summary):
     now = datetime.now().astimezone()
+    
+    # Ask user for sorting preference
+    print("Sort by:")
+    print("1. Total price")
+    print("2. Average price")
+    print("3. Latest trade date")
+    print("4. Seller ID")
+    sort_choice = input("Enter your choice >>> ")
+    clr()
+    if sort_choice == '1':
+        print('Sorting method:')
+        print('1. Highest first')
+        print('2. Lowest first')
+        sort_choice = input("Enter your choice >>> ")
+        if sort_choice == '1':
+            summary.sort(key=lambda x: x['total'], reverse=True)
+        elif sort_choice == '2':
+            summary.sort(key=lambda x: x['total'])
+        else:
+            clr()
+            print("Invalid choice, please try again.")
+            input("Press any key to continue...")
+            menu()
+    elif sort_choice == '2':
+        print('Sorting method:')
+        print('1. Highest first')
+        print('2. Lowest first')
+        sort_choice = input("Enter your choice >>> ")
+        if sort_choice == '1':
+            summary.sort(key=lambda x: x['average'])
+        elif sort_choice == '2':
+            summary.sort(key=lambda x: x['average'], reverse=True)
+        else:
+            clr()
+            print("Invalid choice, please try again.")
+            input("Press any key to continue...")
+            menu()
+    elif sort_choice == '3':
+        print('Sorting method:')
+        print('1. Oldest first')
+        print('2. Newest first')
+        sort_choice = input("Enter your choice >>> ")
+        if sort_choice == '1':
+            summary.sort(key=lambda x: x['latest_trade_date'])
+        elif sort_choice == '2':
+            summary.sort(key=lambda x: x['latest_trade_date'], reverse=True)
+        else:
+            clr()
+            print("Invalid choice, please try again.")
+            input("Press any key to continue...")
+            menu()
+    elif sort_choice == '4':
+        summary.sort(key=lambda x: x['seller'], reverse=True)
+
     for i in summary:
         time_diff = now - i['latest_trade_date']
         days_ago = time_diff.days
-        print(f"Seller >>> {i['seller']} | Total >>> {i['total']} | Average >>> {i['average']} | Last Trade >>> {days_ago} days ago")
+        print(f"Seller >>> {i['seller']} | Total >>> {round(float(i['total'])/100,2)} $ | Average item price >>> {round(float(i['average'])/100,2)} $ | Last Trade >>> {days_ago} days ago")
     input("Press any key to continue...")
     menu()
 
