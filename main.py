@@ -1,6 +1,9 @@
-from api import CSFloat
+from api import CSFloat, Currencies
 import asyncio, math, json, os, dotenv, time
 from datetime import datetime
+
+currency = 'USD'
+currencyApi = Currencies()
 
 def changeToken():
     newToken = input("Enter your CSFloat session token >>> ")
@@ -80,6 +83,7 @@ def createSummary(sellers, data):
     return summary
 
 def displaySummary(summary):
+    global currency, currencyApi
     now = datetime.now().astimezone()
     
     # Ask user for sorting preference
@@ -138,7 +142,7 @@ def displaySummary(summary):
     for i in summary:
         time_diff = now - i['latest_trade_date']
         days_ago = time_diff.days
-        print(f"Seller >>> {i['seller']} | Total >>> {round(float(i['total'])/100,2)} $ | Average item price >>> {round(float(i['average'])/100,2)} $ | Last Trade >>> {days_ago} days ago")
+        print(f"Seller >>> {i['seller']} | Total >>> {round(currencyApi.convertCurrency(float(i['total'])/100,currency), 2)} {currency} | Average item price >>> {round(currencyApi.convertCurrency(float(i['average'])/100,currency),2)} {currency} | Last Trade >>> {days_ago} days ago")
     input("Press any key to continue...")
     menu()
 
@@ -153,14 +157,40 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
     if iteration == total: 
         print()
 
+def changeCurrency():
+    global currency
+    print("Select a currency:")
+    print("1. USD")
+    print("2. EUR")
+    print("3. GBP")
+    print("4. CNY")
+    print("5. PLN")
+    currency_choice = input("Enter your choice >>> ")
+    if currency_choice == '1':
+        currency = 'USD'
+    elif currency_choice == '2':
+        currency = 'EUR'
+    elif currency_choice == '3':
+        currency = 'GBP'
+    elif currency_choice == '4':
+        currency = 'CNY'
+    elif currency_choice == '5':
+        currency = 'PLN'
+    else:
+        clr()
+        print("Invalid choice, please try again.")
+        time.sleep(5)
+
 def menu():
+    global currency
     while True:
         clr()
         print("Select an option:")
         print("1. Show summary")
         print("2. Refresh data")
         print("3. Change session token")
-        print("4. Exit")
+        print(f"4. Change currency | Currently set to {currency}")
+        print("5. Exit")
         choice = input("Enter your choice >>> ")
 
         if choice == '1':
@@ -174,9 +204,12 @@ def menu():
             changeToken()
         elif choice == '4':
             clr()
+            changeCurrency()
+        elif choice == '5':
+            clr()
             print("Exiting...")
             time.sleep(1)
-            break
+            os._exit(0)
         else:
             clr()
             print("Invalid choice, please try again.")
@@ -185,4 +218,5 @@ def menu():
 
 if __name__ == '__main__':
     dotenv.load_dotenv(dotenv.find_dotenv())
+    asyncio.run(currencyApi.fetchCurrencies())
     menu()
