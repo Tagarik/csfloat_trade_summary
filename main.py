@@ -1,171 +1,76 @@
-from api import CSFloat, Currencies
-import asyncio, math, json, os, dotenv, time
-from datetime import datetime
+import asyncio, os, dotenv, time
+import core
+import ui
 
 currency = 'USD'
-currencyApi = Currencies()
 
 def changeToken():
-    newToken = input("Enter your CSFloat session token >>> ")
-    os.environ['SESSION_TOKEN'] = newToken
-    dotenv.set_key(dotenv.find_dotenv(), 'SESSION_TOKEN', newToken)
-    clr()
-    print("Token has been changed successfully!")
-    input("Press any key to continue...")
+    newToken = ui.getNewToken()
+    core.updateToken(newToken)
+    ui.clr()
+    ui.showMessage("Token has been changed successfully!")
 
 async def refresh():
-    AnalysisData = []
     if os.environ['SESSION_TOKEN'] == '':
-        print("Please set your session token first.")
-        input("Press any key to continue...")
+        ui.showMessage("Please set your session token first.")
         return
-    csfloat = CSFloat(os.environ['SESSION_TOKEN'])
+        
     print('Fetching data...')
-    count = await csfloat.requestTradeData('buyer', 0)
-    pages = math.ceil(int(count['count']) / 50)
-    if pages > 29:
-        pages = 30
-    for i in range(pages):
-
-        printProgressBar(i + 1, pages, prefix = 'Progress:', suffix = 'Complete', length = 50)
-        tradeData = await csfloat.requestTradeData('buyer', i)
-        for x in tradeData['trades']:
-            AnalysisData.append({
-                'item': x['contract']['item']['market_hash_name'],
-                'price': x['contract']['price'],
-                'seller': x['seller']['steam_id'],
-                'date': x['accepted_at']
-            })
-    clr()
-    json.dump(AnalysisData, open('AnalysisData.json', 'w'), indent=4)
-    print('Data has been refreshed successfully')
-    input("Press any key to continue...")
+    
+    completed = False
+    async for data in core.fetchTradeData():
+        if data['status'] == 'error':
+            ui.showMessage(data['message'])
+            return
+        elif data['status'] == 'progress':
+            ui.printProgressBar(
+                data['current'], 
+                data['total'], 
+                prefix='Progress:', 
+                suffix='Complete', 
+                length=50
+            )
+        elif data['status'] == 'completed':
+            completed = True
+    
+    if completed:
+        ui.clr()
+        ui.showMessage('Data has been refreshed successfully')
+    else:
+        ui.showMessage('Error occurred while refreshing data')
 
 def AnalyseData():
-    summary = []
-    
-    with open('AnalysisData.json') as raw_data:
-        if raw_data is None:
-            print("No data found, please refresh data first.")
-            input("Press any key to continue...")
-            return
-        data = json.load(raw_data)
-        sellers = sellerList(data)
-        summary = createSummary(sellers, data)  
-    displaySummary(summary)
-
+    data = core.loadAnalysisData()
+    if data is None:
+        ui.showMessage("No data found, please refresh data first.")
+        return
         
-def sellerList(data):
-    sellers = set()  # Use a set to ensure unique sellers
-    for i in data:
-        sellers.add(i['seller'])
-    return list(sellers)
-
-def createSummary(sellers, data):
-    summary = []
-    for i in sellers:
-        total = 0
-        count = 0
-        latest_date = None
-        for x in data:
-            if i == x['seller']:
-                total += x['price']
-                count += 1
-                trade_date = datetime.fromisoformat(x['date'].replace('Z', '+00:00'))
-                if latest_date is None or trade_date > latest_date:
-                    latest_date = trade_date
-        summary.append({
-            'seller': i,
-            'total': total,
-            'average': total / count,
-            'latest_trade_date': latest_date
-        })
-    return summary
-
-def displaySummary(summary):
-    global currency, currencyApi
-    now = datetime.now().astimezone()
+    sellers = core.sellerList(data)
+    summary = core.createSummary(sellers, data)
     
-    # Ask user for sorting preference
-    print("Sort by:")
-    print("1. Total price")
-    print("2. Average price")
-    print("3. Latest trade date")
-    print("4. Seller ID")
-    sort_choice = input("Enter your choice >>> ")
-    clr()
-    if sort_choice == '1':
-        print('Sorting method:')
-        print('1. Highest first')
-        print('2. Lowest first')
-        sort_choice = input("Enter your choice >>> ")
-        if sort_choice == '1':
-            summary.sort(key=lambda x: x['total'], reverse=True)
-        elif sort_choice == '2':
-            summary.sort(key=lambda x: x['total'])
-        else:
-            clr()
-            print("Invalid choice, please try again.")
-            input("Press any key to continue...")
-            menu()
-    elif sort_choice == '2':
-        print('Sorting method:')
-        print('1. Highest first')
-        print('2. Lowest first')
-        sort_choice = input("Enter your choice >>> ")
-        if sort_choice == '1':
-            summary.sort(key=lambda x: x['average'])
-        elif sort_choice == '2':
-            summary.sort(key=lambda x: x['average'], reverse=True)
-        else:
-            clr()
-            print("Invalid choice, please try again.")
-            input("Press any key to continue...")
-            menu()
-    elif sort_choice == '3':
-        print('Sorting method:')
-        print('1. Oldest first')
-        print('2. Newest first')
-        sort_choice = input("Enter your choice >>> ")
-        if sort_choice == '1':
-            summary.sort(key=lambda x: x['latest_trade_date'])
-        elif sort_choice == '2':
-            summary.sort(key=lambda x: x['latest_trade_date'], reverse=True)
-        else:
-            clr()
-            print("Invalid choice, please try again.")
-            input("Press any key to continue...")
-            menu()
-    elif sort_choice == '4':
+    sort_choice, order_choice = ui.getSortPreference()
+    ui.clr()
+    
+    if sort_choice == '1':  # Total price
+        summary.sort(key=lambda x: x['total'], reverse=(order_choice == '1'))
+    elif sort_choice == '2':  # Average price
+        summary.sort(key=lambda x: x['average'], reverse=(order_choice == '1'))
+    elif sort_choice == '3':  # Latest trade date
+        summary.sort(key=lambda x: x['latest_trade_date'], reverse=(order_choice == '2'))
+    elif sort_choice == '4':  # Seller ID
         summary.sort(key=lambda x: x['seller'], reverse=True)
-
-    for i in summary:
-        time_diff = now - i['latest_trade_date']
-        days_ago = time_diff.days
-        print(f"Seller >>> {i['seller']} | Total >>> {round(currencyApi.convertCurrency(float(i['total'])/100,currency), 2)} {currency} | Average item price >>> {round(currencyApi.convertCurrency(float(i['average'])/100,currency),2)} {currency} | Last Trade >>> {days_ago} days ago")
-    input("Press any key to continue...")
+    else:
+        ui.clr()
+        ui.showMessage("Invalid choice, please try again.")
+        return
+        
+    ui.displaySummary(summary, currency, core.convertCurrency)
     menu()
-
-def clr():
-    os.system('cls' if os.name == 'nt' else 'clear')
-
-def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + '-' * (length - filledLength)
-    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
-    if iteration == total: 
-        print()
 
 def changeCurrency():
     global currency
-    print("Select a currency:")
-    print("1. USD")
-    print("2. EUR")
-    print("3. GBP")
-    print("4. CNY")
-    print("5. PLN")
-    currency_choice = input("Enter your choice >>> ")
+    currency_choice = ui.getCurrencyChoice()
+    
     if currency_choice == '1':
         currency = 'USD'
     elif currency_choice == '2':
@@ -177,46 +82,39 @@ def changeCurrency():
     elif currency_choice == '5':
         currency = 'PLN'
     else:
-        clr()
+        ui.clr()
         print("Invalid choice, please try again.")
         time.sleep(5)
 
 def menu():
     global currency
     while True:
-        clr()
-        print("Select an option:")
-        print("1. Show summary")
-        print("2. Refresh data")
-        print("3. Change session token")
-        print(f"4. Change currency | Currently set to {currency}")
-        print("5. Exit")
-        choice = input("Enter your choice >>> ")
+        choice = ui.displayMenu(currency)
 
         if choice == '1':
-            clr()
+            ui.clr()
             AnalyseData()
         if choice == '2':
-            clr()
+            ui.clr()
             asyncio.run(refresh())
         elif choice == '3':
-            clr()
+            ui.clr()
             changeToken()
         elif choice == '4':
-            clr()
+            ui.clr()
             changeCurrency()
         elif choice == '5':
-            clr()
+            ui.clr()
             print("Exiting...")
             time.sleep(1)
             os._exit(0)
         else:
-            clr()
+            ui.clr()
             print("Invalid choice, please try again.")
             time.sleep(5)
-            clr()
+            ui.clr()
 
 if __name__ == '__main__':
     dotenv.load_dotenv(dotenv.find_dotenv())
-    asyncio.run(currencyApi.fetchCurrencies())
+    asyncio.run(core.fetchCurrencies())
     menu()
